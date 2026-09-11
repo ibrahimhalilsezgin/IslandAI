@@ -133,8 +133,13 @@ struct MainView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TriggerRecord"))) { _ in
                 handleDeepLinkRecord()
             }
+            .onChange(of: speechSynthesizer.isSpeaking) { speaking in
+                if !speaking && !isThinking && !speechRecognizer.isRecording {
+                    liveActivityManager.updateActivity(status: .idle)
+                }
+            }
             .onAppear {
-                liveActivityManager.startActivity(initialStatus: "Hazır", isRecording: false)
+                liveActivityManager.startActivity()
             }
         }
     }
@@ -149,10 +154,10 @@ struct MainView: View {
         } else {
             // Stop TTS if speaking
             if speechSynthesizer.isSpeaking {
-                speechSynthesizer.stopSpeaking()
+                speechSynthesizer.stop()
             }
             speechRecognizer.startRecording()
-            liveActivityManager.updateActivity(status: "Dinliyor...", isRecording: true)
+            liveActivityManager.updateActivity(status: .listening)
         }
     }
 
@@ -162,29 +167,33 @@ struct MainView: View {
         messages.append(userMessage)
 
         isThinking = true
-        liveActivityManager.updateActivity(status: "Düşünüyor...", isRecording: false)
+        liveActivityManager.updateActivity(status: .thinking, question: text)
 
         Task {
-            let aiService = AIService(apiKey: apiKey, baseURL: baseURL, model: selectedModel, systemPrompt: systemPrompt)
+            let aiService = AIService()
             do {
-                let responseText = try await aiService.sendMessage(text, history: messages.dropLast())
+                let responseText = try await aiService.sendMessage(
+                    messages: messages,
+                    baseURL: baseURL,
+                    apiKey: apiKey,
+                    model: selectedModel,
+                    systemPrompt: systemPrompt
+                )
 
                 await MainActor.run {
                     isThinking = false
                     let aiMessage = ChatMessage(role: .assistant, content: responseText)
                     messages.append(aiMessage)
 
-                    liveActivityManager.updateActivity(status: responseText, isRecording: false)
-                    speechSynthesizer.speak(text: responseText) {
-                        liveActivityManager.updateActivity(status: "Hazır", isRecording: false)
-                    }
+                    liveActivityManager.updateActivity(status: .speaking, question: text, answer: responseText)
+                    speechSynthesizer.speak(text: responseText)
                 }
             } catch {
                 await MainActor.run {
                     isThinking = false
                     let errorMessage = ChatMessage(role: .assistant, content: "Hata oluştu: \(error.localizedDescription)")
                     messages.append(errorMessage)
-                    liveActivityManager.updateActivity(status: "Hata", isRecording: false)
+                    liveActivityManager.updateActivity(status: .idle)
                 }
             }
         }
@@ -192,16 +201,18 @@ struct MainView: View {
 
     private func toggleLiveActivity() {
         if liveActivityManager.isActivityActive {
-            liveActivityManager.stopActivity()
+            liveActivityManager.endActivity()
         } else {
-            liveActivityManager.startActivity(initialStatus: "Hazır", isRecording: false)
+            liveActivityManager.startActivity()
         }
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
-        if let last = messages.last {
-            withAnimation {
-                proxy.scrollTo(isThinking ? "thinking" : last.id, anchor: .bottom)
+        withAnimation {
+            if isThinking {
+                proxy.scrollTo("thinking", anchor: .bottom)
+            } else if let last = messages.last {
+                proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
     }
