@@ -19,7 +19,7 @@ public class LiveActivityManager: ObservableObject {
         do {
             let activity: Activity<IslandAttributes>
 
-            if #available(iOS 16.1, *) {
+            if #available(iOS 16.2, *) {
                 let activityContent = ActivityContent(state: initialContentState, staleDate: nil)
                 activity = try Activity.request(attributes: attributes, content: activityContent, pushType: nil)
             } else {
@@ -54,7 +54,7 @@ public class LiveActivityManager: ObservableObject {
                 updatedState.lastAnswer = a
             }
 
-            if #available(iOS 16.1, *) {
+            if #available(iOS 16.2, *) {
                 let activityContent = ActivityContent(state: updatedState, staleDate: nil)
                 await activity.update(activityContent)
             } else {
@@ -72,7 +72,7 @@ public class LiveActivityManager: ObservableObject {
         Task {
             let finalState = activity.contentState
 
-            if #available(iOS 16.1, *) {
+            if #available(iOS 16.2, *) {
                 let activityContent = ActivityContent(state: finalState, staleDate: nil)
                 await activity.end(activityContent, dismissalPolicy: .immediate)
             } else {

@@ -22,8 +22,9 @@ public class SpeechRecognizer: ObservableObject {
     }
 
     private func requestPermissions() {
-        SFSpeechRecognizer.requestAuthorization { authStatus in
+        SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
             DispatchQueue.main.async {
+                guard let self = self else { return }
                 switch authStatus {
                 case .authorized:
                     break
@@ -35,8 +36,9 @@ public class SpeechRecognizer: ObservableObject {
             }
         }
 
-        AVAudioSession.sharedInstance().requestRecordPermission { allowed in
+        AVAudioSession.sharedInstance().requestRecordPermission { [weak self] allowed in
             DispatchQueue.main.async {
+                guard let self = self else { return }
                 if !allowed {
                     self.errorMessage = "Mikrofon izni verilmedi."
                 }
@@ -77,8 +79,8 @@ public class SpeechRecognizer: ObservableObject {
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
 
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            self.recognitionRequest?.append(buffer)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+            self?.recognitionRequest?.append(buffer)
         }
 
         audioEngine.prepare()
@@ -93,7 +95,8 @@ public class SpeechRecognizer: ObservableObject {
             return
         }
 
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { result, error in
+        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+            guard let self = self else { return }
             var isFinal = false
 
             if let result = result {
